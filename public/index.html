@@ -1,17 +1,73 @@
-const express = require('express');
-const path = require('path');
-const app = express();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluster Telemetry</title>
+    <style>
+        :root { --bg: #0d1117; --card-bg: #161b22; --text: #c9d1d9; --border: #30363d; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 2rem; margin: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px; padding: 1.5rem; position: relative; overflow: hidden; }
+        .indicator { position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+        .card.Healthy .indicator { background: #238636; }
+        .card.Degraded .indicator { background: #d29922; }
+        .card.Scaling .indicator { background: #388bfd; }
+        .card.Reconciling .indicator { background: #8957e5; }
+        h3 { margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; }
+        .state { font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem; }
+        .timestamp { font-size: 0.75rem; color: #8b949e; }
+        .error { color: #f85149; padding: 1rem; background: rgba(248, 81, 73, 0.1); border-radius: 6px; border: 1px solid rgba(248, 81, 73, 0.4); }
+    </style>
+</head>
+<body>
+    <h2>Distributed Subsystems State</h2>
+    <div id="grid" class="grid">Awaiting telemetry...</div>
 
-const PORT = process.env.PORT || 3000;
-const API_URL = process.env.API_URL || 'http://localhost:8000';
+    <script>
+        let apiUrl = '';
 
-app.use(express.static(path.join(__dirname, 'public')));
+        async function init() {
+            try {
+                const configRes = await fetch('/config.json');
+                const config = await configRes.json();
+                apiUrl = config.apiUrl;
+                poll();
+                setInterval(poll, 2000);
+            } catch (e) {
+                document.getElementById('grid').innerHTML = `<div class="error">Failed to load configuration.</div>`;
+            }
+        }
 
-// Expose runtime config to the client-side JS
-app.get('/config.json', (req, res) => {
-    res.json({ apiUrl: API_URL });
-});
+        async function poll() {
+            try {
+                const res = await fetch(`${apiUrl}/api/v1/nodes`);
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                const data = await res.json();
+                
+                const container = document.getElementById('grid');
+                if (!data.components || Object.keys(data.components).length === 0) {
+                    container.innerHTML = '<p>No active components registered in Redis.</p>';
+                    return;
+                }
 
-app.listen(PORT, () => {
-    console.log(`Dashboard server active on port ${PORT}`);
-});
+                container.innerHTML = Object.entries(data.components).map(([name, info]) => {
+                    const date = new Date(info.last_seen).toLocaleTimeString();
+                    return `
+                        <div class="card ${info.state}">
+                            <div class="indicator"></div>
+                            <h3>${name}</h3>
+                            <div class="state">${info.state}</div>
+                            <div class="timestamp">Last sync: ${date}</div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                document.getElementById('grid').innerHTML = `<div class="error">API Connection Lost. Retrying... (${e.message})</div>`;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
