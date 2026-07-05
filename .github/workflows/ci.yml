@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: larbizyoisco/frontend-app
+  IMAGE_NAME: larbizyoisco/frontend-web
 
 jobs:
   build-and-push:
@@ -61,7 +61,7 @@ jobs:
 
           # Use sed to replace the image tag in the specific manifest.
           # Example for the backend-api:
-          sed -i "s|image: docker.io/larbizyoisco/frontend-app:.*|image: docker.io/larbizyoisco/frontend-app:${NEW_TAG}|g" k8s-manifests/frontend.yaml
+          sed -i "s|image: docker.io/larbizyoisco/frontend-web:.*|image: docker.io/larbizyoisco/frontend-web:${NEW_TAG}|g" k8s-manifests/frontend.yaml
 
           # Commit and push the changes
           git config user.name "GitHub Actions Bot"
